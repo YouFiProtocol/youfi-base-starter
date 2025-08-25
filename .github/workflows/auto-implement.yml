@@ -2,68 +2,47 @@ name: Auto Implement Issue
 
 on:
   issues:
-    types: [opened, labeled, edited]
+    types: [opened, labeled]
 
 permissions:
   contents: write
-  pull-requests: write
   issues: write
+  pull-requests: write
 
 jobs:
   auto-implement:
-    # roda apenas se a issue tiver o label auto-implement
-    if: ${{ contains(join(github.event.issue.labels.*.name, ','), 'auto-implement') }}
+    if: contains(github.event.issue.labels.*.name, 'auto-implement')
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    - name: Checkout
+      uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
 
-      - name: Generate code from issue
-        run: |
-          python .github/scripts/issue-parser.py \
-            "${{ github.event.issue.body }}" \
-            "${{ github.event.issue.title }}" \
-            "${{ github.event.issue.number }}"
+    - name: Generate code from issue
+      run: |
+        python .github/scripts/issue-parser.py \
+          "${{ github.event.issue.body }}" \
+          "${{ github.event.issue.title }}" \
+          "${{ github.event.issue.number }}"
 
-      - name: Create branch and commit changes (if any)
-        id: commit
-        run: |
-          BRANCH="auto-implement-${{ github.event.issue.number }}"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+    - name: Create Pull Request
+      uses: peter-evans/create-pull-request@v6
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: "🤖 Auto-implement: ${{ github.event.issue.title }}"
+        title: "🤖 Auto-implement: ${{ github.event.issue.title }}"
+        body: |
+          Implementação automática da issue #${{ github.event.issue.number }}
 
-          if [[ -n $(git status --porcelain) ]]; then
-            git checkout -b "$BRANCH"
-            git add -A
-            git commit -m "🤖 Auto-implement: #${{ github.event.issue.number }} - ${{ github.event.issue.title }}"
-          else
-            echo "no_changes=true" >> $GITHUB_OUTPUT
-          fi
+          - Código/estrutura gerados pelo bot
+          - Revisar antes do merge
 
-      - name: Push branch
-        if: steps.commit.outputs.no_changes != 'true'
-        run: |
-          BRANCH="auto-implement-${{ github.event.issue.number }}"
-          git push origin "$BRANCH"
-
-      - name: Open Pull Request
-        if: steps.commit.outputs.no_changes != 'true'
-        uses: peter-evans/create-pull-request@v6
-        with:
-          title: "🤖 Auto-implement: #${{ github.event.issue.number }} - ${{ github.event.issue.title }}"
-          body: |
-            Implementação automática gerada a partir da issue #${{ github.event.issue.number }}.
-
-            - Código/esqueleto criado pelo parser
-            - Branch: auto-implement-${{ github.event.issue.number }}
-
-            Ao aprovar este PR, a issue será fechada automaticamente.
-          branch: "auto-implement-${{ github.event.issue.number }}"
-          delete-branch: true
-          labels: auto-generated, needs-review
+          Closes #${{ github.event.issue.number }}
+        branch: "auto-implement-${{ github.event.issue.number }}"
+        delete-branch: true
+        labels: auto-generated, needs-review
